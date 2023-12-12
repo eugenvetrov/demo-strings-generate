@@ -1,5 +1,13 @@
 <script setup>
-const stringArraySize = 1e4;
+import SearchResult from "@/components/SearchResult.vue";
+import ProgressBar from "@/components/ProgressBar.vue";
+import { ref, watch } from "vue";
+
+const stringArraySize = 1e7;
+const progress = ref(0);
+const searchResult = ref([]);
+const searchResultSize = ref(10);
+const inputText = ref("");
 
 function createStringDB() {
   return new Promise((resolve, reject) => {
@@ -39,9 +47,9 @@ const getWorker = () => {
     const myWorker = new Worker("/worker.js");
     myWorker.onmessage = async function (event) {
       console.log(event.data);
-      if (event.data === "added") {
-        const string = await getStringsRequest();
-        console.log((string.length / stringArraySize) * 100);
+      if (event.data === "checkProgress") {
+        const strings = await getStringsRequest();
+        progress.value = Math.round((strings.length / stringArraySize) * 100);
       }
     };
     return myWorker;
@@ -56,52 +64,99 @@ const generateStrings = async ({ stringArraySize }) => {
   myWorker.postMessage({ stringArraySize });
 };
 
-if (window.PerformanceNavigationTiming) {
-  console.info("window.performance works fine on this browser");
-  const entries = performance.getEntriesByType("navigation");
-  for (const entry of entries) {
-    if (entry.type === "reload") {
-      console.log(`${entry.name} was reloaded!`);
-      const strings = async () => await getStringsRequest();
-      if (strings.length < stringArraySize && strings.length !== 0)
-        generateStrings({ stringArraySize });
-    }
-  }
-}
-
 const getStringsRequest = async () => {
   const db = await createStringDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("strings", "readwrite");
     const strings = transaction.objectStore("strings");
     const getStringsRequest = strings.getAll();
-    getStringsRequest.onsuccess = function (event) {
+    getStringsRequest.onsuccess = (event) => {
       resolve(event.target.result);
     };
-    getStringsRequest.onerror = function (event) {
+    getStringsRequest.onerror = (event) => {
       event.preventDefault();
-      console.log(event);
       reject(event.target.result);
     };
   });
 };
+
+if (window.PerformanceNavigationTiming) {
+  console.info("window.performance works fine on this browser");
+  const entries = performance.getEntriesByType("navigation");
+  entries.forEach(async (entry) => {
+    if (entry.type === "reload") {
+      console.log(`${entry.name} was reloaded!`);
+      const strings = await getStringsRequest();
+      if (strings.length < stringArraySize && strings.length !== 0)
+        generateStrings({ stringArraySize });
+    }
+  });
+}
 
 const handleGenerateClick = () => {
   createStringDB();
   generateStrings({ stringArraySize });
 };
 
-const handleSearch = async (event) => {
-  const searchQuery = event.target.value;
-  const string = await getStringsRequest();
-  const result = string.filter((item) => item.includes(searchQuery));
-  console.log(result);
+watch(inputText, async (newSearchQuery) => {
+  const strings = await getStringsRequest();
+  const result = strings.filter((item) => item.includes(newSearchQuery));
+  searchResult.value = result;
+  if (!newSearchQuery) searchResult.value = [];
+});
+
+const showProgress = () => {
+  return progress.value > 0 && progress.value < 100;
 };
 </script>
 
 <template>
   <main>
-    <button @click="handleGenerateClick">Generate</button>
-    <input type="text" @change="handleSearch" />
+    <button class="home__button" @click="handleGenerateClick">сгенерировать</button>
+    <input
+      v-model="inputText"
+      type="textarea"
+      placeholder="для поиска начните ввод"
+      class="home__search-input"
+    />
+    <progress-bar :progress="progress" v-if="showProgress()" />
+    <search-result
+      :results="searchResult"
+      :searchResultSize="searchResultSize"
+    />
   </main>
 </template>
+
+<style lang="scss" scoped>
+@import "@/assets/styles/variables/_colors.scss";
+.home {
+  &__button {
+    max-width: 290px;
+    max-height: 40px;
+    margin: 20px auto;
+    width: 100%;
+    height: 100%;
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 18px;
+    font-weight: 400;
+    background-color: $button-primary-background-color;
+    border: none;
+    color: $button-primary-text-color;
+  }
+
+  &__search-input {
+    width: 100%;
+    max-width: 250px;
+    height: 100%;
+    max-height: 200px;
+    margin: auto;
+    padding: 20px;
+    border-radius: 10px;
+    font-size: 20px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+</style>

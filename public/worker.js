@@ -30,7 +30,7 @@ const generateStringCountRequest = async (stringArraySize) => {
       console.log(count);
       for (let i = count; i < stringArraySize; i++) {
         await addString();
-        if (i % 100 === 0) self.postMessage("added");
+        if (i % 10 === 0) self.postMessage("checkProgress");
       }
       resolve();
     };
