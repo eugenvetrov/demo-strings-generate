@@ -30,7 +30,7 @@ watch(results, () => (pageNumber.value = 0));
         @click="prevPage"
         :disabled="pageNumber == 0"
       >
-        След.
+        Пред.
       </button>
       <span class="search-result__page-number"
         >{{ pageNumber }}/{{ pageCount > 0 ? pageCount - 1 : 0 }}</span
@@ -40,7 +40,7 @@ watch(results, () => (pageNumber.value = 0));
         :disabled="pageNumber >= pageCount - 1"
         class="search-result__button"
       >
-        Пред.
+        След.
       </button>
       <input
         class="search-result__page-choose"

@@ -105,8 +105,9 @@ watch(inputText, async (newSearchQuery) => {
   if (!newSearchQuery) searchResult.value = [];
 });
 
-const showProgress = () => {
-  return progress.value > 0 && progress.value < 100;
+const showProgress = async () => {
+  const strings = await getStringsRequest();
+  return strings > 0 && strings < stringArraySize;
 };
 </script>
 
