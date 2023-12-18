@@ -3,10 +3,11 @@ import SearchResult from "@/components/SearchResult.vue";
 import ProgressBar from "@/components/ProgressBar.vue";
 import { ref, watch } from "vue";
 
-const stringArraySize = 1e7;
+const stringArraySize = 1e5;
 const progress = ref(0);
 const searchResult = ref([]);
 const searchResultSize = ref(10);
+const searchResultLoad = ref(false);
 const inputText = ref("");
 
 function createStringDB() {
@@ -31,12 +32,13 @@ function createStringDB() {
       }
     };
 
-    stringDBOpenRequest.onupgradeneeded = function (event) {
-      console.log("upgrade entry");
+    stringDBOpenRequest.onupgradeneeded = (event) => {
       const db = event.target.result;
       if (!db.objectStoreNames.contains("strings")) {
-        db.createObjectStore("strings", { autoIncrement: true });
-        console.log("db", db);
+        const stringStore = db.createObjectStore("strings", {
+          autoIncrement: "true",
+        });
+        stringStore.createIndex("string_idx", "stringValue");
       }
     };
   });
@@ -80,6 +82,40 @@ const getStringsRequest = async () => {
   });
 };
 
+const searchStrings = async (searchString) => {
+  const db = await createStringDB();
+  return new Promise((resolve, reject) => {
+    searchResultLoad.value = true;
+    const result = [];
+    const transaction = db.transaction("strings", "readwrite");
+    const strings = transaction.objectStore("strings");
+    const stringIndex = strings.index("string_idx");
+    const stringCursor = stringIndex.openCursor();
+    stringCursor.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        if (cursor.key.includes(searchString))
+          result.push(cursor.value.stringValue);
+        console.log(result);
+        cursor.continue();
+      } else {
+        resolve(result);
+        searchResultLoad.value = false;
+        console.log("Not found more strings");
+      }
+    };
+    stringCursor.onerror = (event) => {
+      event.preventDefault();
+      searchResultLoad.value = false;
+      reject(event.target.result);
+    };
+    stringCursor.oncomplete = () => {
+      searchResultLoad.value = false;
+      resolve(result);
+    };
+  });
+};
+
 if (window.PerformanceNavigationTiming) {
   console.info("window.performance works fine on this browser");
   const entries = performance.getEntriesByType("navigation");
@@ -99,9 +135,7 @@ const handleGenerateClick = () => {
 };
 
 watch(inputText, async (newSearchQuery) => {
-  const strings = await getStringsRequest();
-  const result = strings.filter((item) => item.includes(newSearchQuery));
-  searchResult.value = result;
+  searchResult.value = await searchStrings(newSearchQuery);
   if (!newSearchQuery) searchResult.value = [];
 });
 
@@ -113,13 +147,16 @@ const showProgress = async () => {
 
 <template>
   <main>
-    <button class="home__button" @click="handleGenerateClick">сгенерировать</button>
+    <button class="home__button" @click="handleGenerateClick">
+      сгенерировать
+    </button>
     <input
       v-model="inputText"
       type="textarea"
       placeholder="для поиска начните ввод"
       class="home__search-input"
     />
+    <p v-if="searchResultLoad">Подождите результаты поиска</p>
     <progress-bar :progress="progress" v-if="showProgress()" />
     <search-result
       :results="searchResult"

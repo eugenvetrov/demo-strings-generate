@@ -5,16 +5,28 @@ const getRandomString = (length) => {
   ).join("");
 };
 
-const addString = async () => {
+const addString = async (string) => {
   const db = await createStringDB();
   return new Promise((resolve) => {
     const transaction = db.transaction("strings", "readwrite");
     const strings = transaction.objectStore("strings");
-    const addStringRequest = strings.add(getRandomString(100));
+    const addStringRequest = strings.add(string);
     addStringRequest.onsuccess = function (event) {
       console.log("added ", event.target.result);
       resolve("added success");
     };
+  });
+};
+
+const addStrings = async (stringstoAdd) => {
+  const db = await createStringDB();
+  return new Promise((resolve) => {
+    const transaction = db.transaction("strings", "readwrite");
+    const strings = transaction.objectStore("strings");
+    for (const element of stringstoAdd) {
+      strings.add(element);
+    }
+    resolve();
   });
 };
 
@@ -27,10 +39,14 @@ const generateStringCountRequest = async (stringArraySize) => {
       .count();
     stringCountRequest.onsuccess = async (event) => {
       const count = event.target.result;
-      console.log(count);
-      for (let i = count; i < stringArraySize; i++) {
-        await addString();
-        if (i % 10 === 0) self.postMessage("checkProgress");
+      const needToGenerate = stringArraySize - count;
+      for (let i = 0; i < 1000; i++) {
+        const strings = [];
+        for (let i = 0; i < needToGenerate / 1000; i++) {
+          const string = getRandomString(100);
+          strings.push({ stringValue: string });
+        }
+        addStrings(strings);
       }
       resolve();
     };
@@ -45,7 +61,6 @@ const createStringDB = () => {
       reject(event.target.errorCode);
     };
     stringDBOpenRequest.onsuccess = (event) => {
-      console.log("success entry");
       const db = event.target.result;
       db.onversionchange = () => {
         db.close();
@@ -59,8 +74,14 @@ const createStringDB = () => {
       console.log("upgrade entry");
       const db = event.target.result;
       if (!db.objectStoreNames.contains("strings")) {
-        db.createObjectStore("strings", { autoIncrement: true });
-        console.log("db", db);
+        const stringStore = db.createObjectStore("strings", {
+          autoIncrement: "true",
+        });
+        const stringIndex = stringStore.createIndex(
+          "string_idx",
+          "stringValue"
+        );
+        console.log(stringIndex);
       }
     };
   });
